@@ -172,6 +172,11 @@
     var d = new Date(iso);
     return d.toLocaleString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
   }
+  // Short enough (6 hex chars) to not overlap its neighbor at the shelf's 56px item spacing --
+  // a real, found-in-testing bug: the full 12-char WI-id ran labels into each other.
+  function shortId(id){
+    return (id || '').replace('WI-', '').slice(0, 6);
+  }
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
@@ -283,17 +288,25 @@
     });
     return slots;
   }
-  function roundRect(x,y,w,h,r){
-    ctx.beginPath();
-    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
-    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  // Real pixel-art sprites (16x16 source, nearest-neighbor scaled) replace the earlier
+  // procedurally-drawn shapes -- generated once via the pixel-art-gen skill, not fetched from
+  // any third party. workerSprite is drawn with a per-peer CSS hue-rotate filter (its clothing
+  // is a mid-saturation gray-blue specifically so the rotation reads clearly; its outline/shading
+  // are near-black/desaturated so they barely shift) so each peer still reads as its own
+  // character without needing a separate sprite per hue.
+  var workerSprite = new Image(); workerSprite.src = 'assets/worker.png';
+  var crateSprite = new Image(); crateSprite.src = 'assets/crate.png';
+  var spritesReady = false;
+  function checkSpritesReady(){
+    if (workerSprite.complete && crateSprite.complete) { spritesReady = true; draw(performance.now()); }
   }
-  function drawCrate(x, y, w, h, C){
-    ctx.save();
-    ctx.fillStyle = C.panel2; ctx.strokeStyle = C.lineStrong; ctx.lineWidth = 1.5;
-    roundRect(x-w/2, y-h/2, w, h, 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x-w/2, y); ctx.lineTo(x+w/2, y); ctx.moveTo(x, y-h/2); ctx.lineTo(x, y+h/2); ctx.stroke();
-    ctx.restore();
+  workerSprite.onload = checkSpritesReady; crateSprite.onload = checkSpritesReady;
+
+  function drawCrate(x, y, w, h){
+    if (!spritesReady) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(crateSprite, x - w/2, y - h/2, w, h);
+    ctx.imageSmoothingEnabled = true;
   }
 
   function carriedItemFor(name, items){
@@ -430,33 +443,23 @@
     var slots = layoutShelf(items.map(function(wi){ return wi.id; }), width);
     items.forEach(function(wi){
       var pos = slots[wi.id];
-      drawCrate(pos.x, pos.y, 22, 16, C);
+      drawCrate(pos.x, pos.y, 22, 16);
       ctx.fillStyle = C.faint; ctx.font = "9px 'IBM Plex Mono', monospace"; ctx.textAlign = 'center';
-      ctx.fillText((wi.id||'').replace('WI-',''), pos.x, pos.y + 22);
+      ctx.fillText(shortId(wi.id), pos.x, pos.y + 22);
     });
     ctx.textAlign = 'left';
   }
 
-  // A small chunky pixel-art person: block body, block head, two-tone shading.
-  // Drawn at integer-ish scale so it reads as "pixel art" rather than a smooth vector blob.
+  // Draws the real worker sprite, tinted per-peer via a canvas hue-rotate filter -- the sprite's
+  // clothing was deliberately drawn as a mid-saturation gray-blue so rotation reads clearly,
+  // while its outline/skin stay close to neutral so they don't shift into anything jarring.
   function drawPixelPerson(hue, shrink){
-    var s = 3 * shrink; // pixel unit
-    var body = 'hsl(' + hue + ',45%,42%)';
-    var bodyLight = 'hsl(' + hue + ',45%,54%)';
-    var skin = 'hsl(30,45%,72%)';
+    if (!spritesReady) return;
+    var size = 26 * shrink;
     ctx.imageSmoothingEnabled = false;
-    // legs
-    ctx.fillStyle = 'hsl(' + hue + ',20%,25%)';
-    ctx.fillRect(-3*s, 0, 2*s, 3*s); ctx.fillRect(1*s, 0, 2*s, 3*s);
-    // torso
-    ctx.fillStyle = body; ctx.fillRect(-4*s, -8*s, 8*s, 8*s);
-    ctx.fillStyle = bodyLight; ctx.fillRect(-4*s, -8*s, 8*s, 2*s);
-    // arms
-    ctx.fillStyle = body; ctx.fillRect(-6*s, -7*s, 2*s, 5*s); ctx.fillRect(4*s, -7*s, 2*s, 5*s);
-    // head
-    ctx.fillStyle = skin; ctx.fillRect(-3*s, -14*s, 6*s, 6*s);
-    // eyes
-    ctx.fillStyle = 'hsl(220,20%,15%)'; ctx.fillRect(-2*s, -11*s, 1.4*s, 1.4*s); ctx.fillRect(1*s, -11*s, 1.4*s, 1.4*s);
+    ctx.filter = 'hue-rotate(' + hue + 'deg)';
+    ctx.drawImage(workerSprite, -size/2, -size, size, size);
+    ctx.filter = 'none';
     ctx.imageSmoothingEnabled = true;
   }
 
@@ -477,9 +480,9 @@
 
     if (a.crateVisible) {
       ctx.save(); ctx.globalAlpha = a.crateAlpha;
-      drawCrate(a.crateX, a.crateY, 15, 11, C);
+      drawCrate(a.crateX, a.crateY, 15, 11);
       ctx.fillStyle = C.accent; ctx.font = "600 9px 'IBM Plex Mono', monospace"; ctx.textAlign = 'center';
-      ctx.fillText(((a.carriedId || a.pendingCarriedId || '')+'').replace('WI-',''), a.crateX, a.crateY - 9);
+      ctx.fillText(shortId(a.carriedId || a.pendingCarriedId), a.crateX, a.crateY - 9);
       ctx.restore();
     }
 
@@ -494,12 +497,22 @@
       ctx.restore();
     }
 
+    // Real bug found in narrow-viewport testing: text centered on an edge desk's x can run past
+    // the canvas bounds (canvas text is never wrapped or auto-clipped like DOM text). Measure and
+    // clamp so a name/status label always stays fully on-canvas, regardless of desk position.
+    var canvasWidth = canvas.clientWidth || 600;
+    function drawClampedCenteredText(text, y){
+      var w = ctx.measureText(text).width;
+      var cx = Math.min(Math.max(a.x, w/2 + 4), canvasWidth - w/2 - 4);
+      ctx.fillText(text, cx, y);
+    }
+
     ctx.fillStyle = C.ink; ctx.font = "600 11px 'IBM Plex Mono', monospace"; ctx.textAlign = 'center';
-    ctx.fillText(a.name, a.x, FLOOR_Y + 34);
+    drawClampedCenteredText(a.name, FLOOR_Y + 34);
     var statusLabel = a.carriedId ? (a.phase === 'working' ? 'working' : 'carrying it back')
       : (a.phase === 'toShelf' || a.phase === 'lifting' ? 'heading to queue' : 'idle');
     ctx.fillStyle = a.carriedId ? C.good : C.faint; ctx.font = "10px 'IBM Plex Mono', monospace";
-    ctx.fillText(statusLabel, a.x, FLOOR_Y + 46);
+    drawClampedCenteredText(statusLabel, FLOOR_Y + 46);
   }
 
   function draw(now){
