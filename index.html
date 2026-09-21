@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hyperium Fleet</title>
+<meta name="description" content="Live Hyperium/Alexandria worker fleet activity — open PRs, Control Plane queue, peer sessions.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101828'/%3E%3Crect x='15' y='13' width='9' height='38' fill='%23fff'/%3E%3Crect x='37' y='13' width='9' height='38' fill='%23fff'/%3E%3Crect x='24' y='28' width='13' height='8' fill='%23fff'/%3E%3Crect x='49' y='42' width='9' height='9' fill='%232563EB'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper:#F3F5F6; --panel:#FFFFFF; --panel-2:#EDF1F2; --ink:#1B2430;
+    --muted:#5B6B76; --faint:#8C9AA3; --line:#D7DEE3; --line-strong:#B9C5CB;
+    --accent:#2D6E8E; --accent-soft:#E3EDF1;
+    --good:#386B3D; --good-soft:#E4EFE1;
+    --warn:#96600C; --warn-soft:#F6EBD9;
+    --bad:#B4432F; --bad-soft:#F5E1DC;
+    --neutral:#6B7683; --neutral-soft:#EBEDEF;
+    --studio-wall:#DDE6EA; --studio-wall-2:#C9D6DC; --studio-floor:#B8A98C; --studio-floor-2:#A6976F;
+    --font-display:'Libre Franklin',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#12181D; --panel:#1A2228; --panel-2:#212B32; --ink:#E7EDF0;
+      --muted:#93A3AC; --faint:#66767F; --line:#2B363D; --line-strong:#3B4850;
+      --accent:#78BEDD; --accent-soft:#1E3540;
+      --good:#7FBF7F; --good-soft:#1F3320;
+      --warn:#E0A94E; --warn-soft:#3A2C14;
+      --bad:#E38471; --bad-soft:#3A231D;
+      --neutral:#9AA6B0; --neutral-soft:#242C33;
+      --studio-wall:#232E36; --studio-wall-2:#1B242A; --studio-floor:#3A3020; --studio-floor-2:#2E2718;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#12181D; --panel:#1A2228; --panel-2:#212B32; --ink:#E7EDF0;
+    --muted:#93A3AC; --faint:#66767F; --line:#2B363D; --line-strong:#3B4850;
+    --accent:#78BEDD; --accent-soft:#1E3540;
+    --good:#7FBF7F; --good-soft:#1F3320;
+    --warn:#E0A94E; --warn-soft:#3A2C14;
+    --bad:#E38471; --bad-soft:#3A231D;
+    --neutral:#9AA6B0; --neutral-soft:#242C33;
+    --studio-wall:#232E36; --studio-wall-2:#1B242A; --studio-floor:#3A3020; --studio-floor-2:#2E2718;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--paper); color:var(--ink); font-family:var(--font-display); line-height:1.5;}
+  img{max-width:100%;}
+  .wrap{max-width:1080px; margin:0 auto; padding:32px 20px 80px;}
+
+  header{display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px 20px; margin-bottom:6px;}
+  h1{font-size:1.6rem; font-weight:800; letter-spacing:-.01em; margin:0; display:flex; align-items:center; gap:10px;}
+  .brandmark{width:28px; height:28px; border-radius:6px; flex:none;}
+  .freshness{font-family:var(--font-mono); font-size:12px; color:var(--faint);}
+  .freshness b{color:var(--muted); font-weight:600;}
+  .subhead{color:var(--muted); font-size:.92rem; margin:0 0 28px; max-width:70ch;}
+
+  .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:36px;}
+  .tile{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px 18px;}
+  .tile .n{font-family:var(--font-mono); font-size:1.8rem; font-weight:600; line-height:1;}
+  .tile .l{font-size:12px; color:var(--muted); margin-top:6px; text-transform:uppercase; letter-spacing:.04em;}
+  .tile.accent .n{color:var(--accent);}
+  .tile.warn .n{color:var(--warn);}
+  .tile.good .n{color:var(--good);}
+
+  section{margin-bottom:36px;}
+  .section-head{display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:14px;}
+  h2{font-size:1rem; font-weight:700; margin:0; display:inline-flex; align-items:center; gap:8px;}
+  .live-dot{width:7px; height:7px; border-radius:50%; background:var(--good); display:inline-block; animation:pulse 2s ease-in-out infinite;}
+  @media (prefers-reduced-motion: reduce){ .live-dot{animation:none;} }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  .count-badge{font-family:var(--font-mono); font-size:11px; color:var(--faint);}
+
+  .pr-list{display:grid; gap:2px; background:var(--line); border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .pr-row{background:var(--panel); padding:12px 16px; display:grid; grid-template-columns:60px minmax(0,1fr) auto; gap:14px; align-items:center;}
+  .pr-num{font-family:var(--font-mono); font-size:12px; color:var(--faint);}
+  .pr-title{font-size:.92rem; min-width:0;}
+  .pr-title a{color:var(--ink); text-decoration:none;}
+  .pr-title a:hover{color:var(--accent);}
+  .pr-branch{font-family:var(--font-mono); font-size:11px; color:var(--faint); display:block; margin-top:2px;}
+  .pill{font-family:var(--font-mono); font-size:11px; font-weight:600; padding:3px 9px; border-radius:99px; white-space:nowrap;}
+  .pill.good{background:var(--good-soft); color:var(--good);}
+  .pill.warn{background:var(--warn-soft); color:var(--warn);}
+  .pill.bad{background:var(--bad-soft); color:var(--bad);}
+  .pill.neutral{background:var(--neutral-soft); color:var(--neutral);}
+  @media (max-width:560px){ .pr-row{grid-template-columns:1fr; gap:6px;} .pr-num{display:none;} }
+
+  .feed{display:flex; flex-direction:column; gap:0;}
+  .feed-row{display:grid; grid-template-columns:90px minmax(0,1fr); gap:14px; padding:9px 0; border-bottom:1px dashed var(--line);}
+  .action-tag{font-family:var(--font-mono); font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:4px; margin-right:8px;}
+  .action-tag.shipped{background:var(--good-soft); color:var(--good);}
+  .feed-row:last-child{border-bottom:none;}
+  .feed-time{font-family:var(--font-mono); font-size:11px; color:var(--faint); padding-top:2px;}
+  .feed-text{font-size:.9rem;}
+
+  .fleet-wrap{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px; overflow:hidden;}
+  #fleet-canvas{width:100%; height:280px; display:block; border-radius:6px;}
+  .fleet-legend{display:flex; gap:16px; flex-wrap:wrap; font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:10px;}
+  .fleet-legend span{display:inline-flex; align-items:center; gap:6px;}
+  .sw{width:10px; height:10px; border-radius:2px; display:inline-block;}
+
+  .queue-bar{display:flex; height:28px; border-radius:6px; overflow:hidden; border:1px solid var(--line-strong); margin-bottom:10px;}
+  .queue-seg{display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:11px; font-weight:600; color:#fff; min-width:2px;}
+  .queue-legend{display:flex; gap:16px; flex-wrap:wrap; font-family:var(--font-mono); font-size:11px; color:var(--muted);}
+
+  .empty{color:var(--faint); font-size:.88rem; font-style:italic; padding:16px;}
+  footer{border-top:1px solid var(--line); margin-top:48px; padding-top:18px; font-size:12px; color:var(--faint);}
+  footer a{color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><svg class="brandmark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#101828"/><rect x="15" y="13" width="9" height="38" fill="#fff"/><rect x="37" y="13" width="9" height="38" fill="#fff"/><rect x="24" y="28" width="13" height="8" fill="#fff"/><rect x="49" y="42" width="9" height="9" fill="#2563EB"/></svg>Hyperium Fleet</h1>
+    <div class="freshness">Snapshot: <b id="freshness-time">—</b></div>
+  </header>
+  <p class="subhead">A real, evidence-based snapshot of the Hyperium/Alexandria worker fleet — open PRs, CI status, the Control Plane queue and active peer sessions. Regenerated every few minutes by a scheduled job reading live GitHub and Control Plane state — not instantly live, check the timestamp above.</p>
+
+  <div class="tiles" id="tiles">
+    <div class="tile accent"><div class="n">—</div><div class="l">Open PRs</div></div>
+    <div class="tile warn"><div class="n">—</div><div class="l">Ready to claim</div></div>
+    <div class="tile"><div class="n">—</div><div class="l">Claimed</div></div>
+    <div class="tile good"><div class="n">—</div><div class="l">Active peers</div></div>
+  </div>
+
+  <section>
+    <div class="section-head"><h2>Studio floor</h2><span class="count-badge" id="fleet-count"></span></div>
+    <div class="fleet-wrap"><canvas id="fleet-canvas" role="img" aria-label="Pixel-art view of peer sessions working at their desks, claiming and shipping work items"></canvas></div>
+    <div class="fleet-legend">
+      <span><span class="sw" style="background:var(--warn-soft); border:1px solid var(--warn);"></span>Queue crate — unclaimed item</span>
+      <span><span class="sw" style="background:var(--accent-soft); border:1px solid var(--accent);"></span>Progress bar — real elapsed claim time</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Shipped <span class="live-dot" aria-hidden="true"></span></h2><span class="count-badge">recent merges</span></div>
+    <div class="feed" id="live-feed"><div class="empty">No recent activity.</div></div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Open PRs</h2><span class="count-badge" id="pr-count"></span></div>
+    <div class="pr-list" id="pr-list"><div class="empty">Loading…</div></div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Control Plane queue</h2></div>
+    <div id="queue-bar-wrap"></div>
+  </section>
+
+  <footer>Data regenerated periodically by a scheduled job in <a href="https://github.com/ExistenceDenied/Alexandria" target="_blank" rel="noopener">ExistenceDenied/Alexandria</a> from live GitHub and Control Plane state. Source for this page: <a href="https://github.com/ExistenceDenied/hyperium-fleet-dashboard" target="_blank" rel="noopener">hyperium-fleet-dashboard</a>.</footer>
+</div>
+
+<script>
+(function(){
+  var REFRESH_MS = 30000;
+
+  function fmtAgo(iso){
+    if(!iso) return '';
+    var d = new Date(iso);
+    var diffMs = Date.now() - d.getTime();
+    var mins = Math.round(diffMs/60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    var hrs = Math.round(mins/60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.round(hrs/24) + 'd ago';
+  }
+  function fmtClock(iso){
+    if(!iso) return '—';
+    var d = new Date(iso);
+    return d.toLocaleString(undefined, {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  }
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function ciPill(status){
+    var map = {
+      pass: ['good','CI passing'], fail: ['bad','CI failing'],
+      pending: ['warn','CI running'], mixed: ['warn','CI mixed'],
+      unknown: ['neutral','CI unknown']
+    };
+    var m = map[status] || map.unknown;
+    return '<span class="pill ' + m[0] + '">' + m[1] + '</span>';
+  }
+
+  function renderTiles(d){
+    var tiles = document.querySelectorAll('#tiles .tile .n');
+    if (!d || tiles.length < 4) return;
+    tiles[0].textContent = (d.prs || []).length;
+    tiles[1].textContent = (d.queue && d.queue.ready) ?? '—';
+    tiles[2].textContent = (d.queue && d.queue.claimed) ?? '—';
+    tiles[3].textContent = (d.peers || []).length;
+    document.getElementById('freshness-time').textContent = d.generatedAt ? (fmtClock(d.generatedAt) + ' (' + fmtAgo(d.generatedAt) + ')') : '—';
+  }
+
+  function renderPrs(prs){
+    var el = document.getElementById('pr-list');
+    var countEl = document.getElementById('pr-count');
+    if (!prs || prs.length === 0) {
+      el.innerHTML = '<div class="empty">No open PRs right now.</div>';
+      countEl.textContent = '0';
+      return;
+    }
+    countEl.textContent = prs.length;
+    var sorted = prs.slice().sort(function(a,b){ return (b.number||0) - (a.number||0); });
+    el.innerHTML = sorted.map(function(pr){
+      return '<div class="pr-row">' +
+        '<span class="pr-num">#' + esc(pr.number) + '</span>' +
+        '<span class="pr-title"><a href="' + esc(pr.url) + '" target="_blank" rel="noopener">' + esc(pr.title) + '</a>' +
+        '<span class="pr-branch">' + esc(pr.branch || '') + '</span></span>' +
+        ciPill(pr.ciStatus) +
+        '</div>';
+    }).join('');
+  }
+
+  function renderActivity(items){
+    var el = document.getElementById('live-feed');
+    if (!items || items.length === 0) { el.innerHTML = '<div class="empty">No recent activity.</div>'; return; }
+    var sorted = items.slice().sort(function(a,b){ return new Date(b.at) - new Date(a.at); });
+    el.innerHTML = sorted.slice(0,15).map(function(ev){
+      return '<div class="feed-row">' +
+        '<span class="feed-time">' + esc(fmtAgo(ev.at)) + '</span>' +
+        '<span class="feed-text"><span class="action-tag shipped">Shipped</span>' + esc(ev.title) + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderQueue(q){
+    var wrap = document.getElementById('queue-bar-wrap');
+    if (!q) { wrap.innerHTML = '<div class="empty">No queue data.</div>'; return; }
+    var segs = [
+      {key:'ready', label:'Ready', color:'var(--warn)'},
+      {key:'claimed', label:'Claimed', color:'var(--accent)'},
+      {key:'waiting', label:'Waiting', color:'var(--neutral)'}
+    ];
+    var total = segs.reduce(function(sum,s){ return sum + (q[s.key]||0); }, 0) || 1;
+    var bar = '<div class="queue-bar">' + segs.map(function(s){
+      var v = q[s.key] || 0;
+      if (v === 0) return '';
+      var pct = Math.max(4, (v/total*100));
+      return '<div class="queue-seg" style="width:' + pct + '%;background:' + s.color + ';">' + v + '</div>';
+    }).join('') + '</div>';
+    var legend = '<div class="queue-legend">' + segs.map(function(s){
+      return '<span><span class="sw" style="background:' + s.color + ';"></span>' + s.label + ': ' + (q[s.key]||0) + '</span>';
+    }).join('') + '</div>';
+    wrap.innerHTML = bar + legend;
+  }
+
+  // ---- Studio floor: pixel-art canvas scene. Each active peer is a small
+  // pixel character at its own desk. A claimed work item appears as a crate
+  // that travels from the queue shelf to that peer's desk and a progress bar
+  // above the character fills based on real elapsed time since claimedAt.
+  var CANVAS_H = 280, FLOOR_Y = 210, SHELF_Y = 60, WALK_SPEED = 110;
+  var canvas, ctx, dpr = 1, rafId = null;
+  var animPeers = {};
+  var shelfPositions = {};
+  var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var state = { peers: [], workItems: [], data: null };
+
+  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function hueForName(name){
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+    return h;
+  }
+  function layoutDesks(names, width){
+    var margin = 70, n = names.length || 1, usable = Math.max(width - margin*2, 40);
+    var slots = {};
+    names.forEach(function(name, i){ slots[name] = margin + (n === 1 ? usable/2 : usable * i/(n-1)); });
+    return slots;
+  }
+  function layoutShelf(ids, width){
+    var startX = 74, gap = 56, rowGap = 34;
+    var perRow = Math.max(1, Math.floor((width - startX - 20) / gap));
+    var slots = {};
+    ids.forEach(function(id, i){
+      var col = i % perRow, row = Math.floor(i / perRow);
+      slots[id] = { x: startX + col*gap, y: SHELF_Y + row*rowGap };
+    });
+    return slots;
+  }
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+  function drawCrate(x, y, w, h, C){
+    ctx.save();
+    ctx.fillStyle = C.panel2; ctx.strokeStyle = C.lineStrong; ctx.lineWidth = 1.5;
+    roundRect(x-w/2, y-h/2, w, h, 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-w/2, y); ctx.lineTo(x+w/2, y); ctx.moveTo(x, y-h/2); ctx.lineTo(x, y+h/2); ctx.stroke();
+    ctx.restore();
+  }
+
+  function carriedItemFor(name, items){
+    var found = null;
+    (items || []).forEach(function(wi){ if (wi.status === 'CLAIMED' && wi.claimedBy === name) found = wi; });
+    return found;
+  }
+
+  function syncScene(){
+    if (!canvas) return;
+    var peers = state.peers || [];
+    var items = state.workItems || [];
+    var width = canvas.clientWidth || 600;
+    var deskSlots = layoutDesks(peers.map(function(p){ return p.name; }), width);
+    var readyIds = items.filter(function(wi){ return wi.status === 'READY'; }).map(function(wi){ return wi.id; });
+    var shelfSlots = layoutShelf(readyIds, width);
+    Object.keys(shelfSlots).forEach(function(id){ shelfPositions[id] = shelfSlots[id]; });
+
+    var seen = {};
+    peers.forEach(function(p){
+      seen[p.name] = true;
+      var a = animPeers[p.name];
+      var deskX = deskSlots[p.name] != null ? deskSlots[p.name] : width/2;
+      if (!a) {
+        a = animPeers[p.name] = {
+          name: p.name, hue: hueForName(p.name), x: deskX, deskX: deskX, facing: 1,
+          phase: 'atDesk', phaseStart: performance.now(), t0: performance.now(),
+          carriedId: null, claimedAt: null, pendingCarriedId: null, pendingClaimedAt: null,
+          crateX: deskX, crateY: FLOOR_Y - 26, crateVisible: false, crateAlpha: 1
+        };
+      }
+      a.deskX = deskX;
+
+      var carried = carriedItemFor(p.name, items);
+      var newCarriedId = carried ? carried.id : null;
+      var effectiveCarried = a.pendingCarriedId || a.carriedId;
+      if (newCarriedId !== effectiveCarried) {
+        if (newCarriedId) {
+          a.pendingCarriedId = newCarriedId;
+          a.pendingClaimedAt = carried.claimedAt || null;
+          var shelfPos = shelfPositions[newCarriedId];
+          a.targetX = shelfPos ? shelfPos.x : 74;
+          a.targetShelfY = shelfPos ? shelfPos.y : SHELF_Y;
+          a.phase = 'toShelf';
+        } else if (a.phase !== 'dropping' && a.phase !== 'atDesk') {
+          a.phase = 'dropping'; a.phaseStart = performance.now(); a.pendingCarriedId = null;
+        }
+      }
+    });
+    Object.keys(animPeers).forEach(function(name){ if (!seen[name]) delete animPeers[name]; });
+
+    document.getElementById('fleet-count').textContent = peers.length + ' peer' + (peers.length === 1 ? '' : 's') + ' · ' + readyIds.length + ' in queue';
+    ensureLoop();
+  }
+
+  function bobOffset(a, now){
+    if (reduceMotion) return 0;
+    var t = (now - a.t0) / 1000;
+    if (a.phase === 'working') return -6 * Math.abs(Math.sin(t * Math.PI * 3.2));
+    if (a.phase === 'toShelf' || a.phase === 'toDesk') return -3 * Math.abs(Math.sin(t * Math.PI * 6));
+    return -2 * Math.abs(Math.sin(t * Math.PI * 0.9));
+  }
+
+  function update(dt, now){
+    Object.keys(animPeers).forEach(function(name){
+      var a = animPeers[name];
+      if (reduceMotion) {
+        if (a.pendingCarriedId) { a.carriedId = a.pendingCarriedId; a.claimedAt = a.pendingClaimedAt; a.pendingCarriedId = null; }
+        if (a.phase === 'dropping') { a.carriedId = null; a.claimedAt = null; }
+        a.crateVisible = !!a.carriedId; a.crateAlpha = 1;
+        a.x = a.deskX; a.crateX = a.deskX; a.crateY = FLOOR_Y - 26;
+        a.phase = a.carriedId ? 'working' : 'atDesk';
+        return;
+      }
+      if (a.phase === 'toShelf') {
+        var dx = a.targetX - a.x, dist = Math.abs(dx);
+        if (dist > 1.5) { a.x += Math.sign(dx) * Math.min(WALK_SPEED*dt/1000, dist); a.facing = dx >= 0 ? 1 : -1; }
+        else { a.x = a.targetX; a.phase = 'lifting'; a.phaseStart = now; a.crateX = a.x; a.crateY = a.targetShelfY; a.crateVisible = true; a.crateAlpha = 1; }
+      } else if (a.phase === 'lifting') {
+        var t = Math.min((now - a.phaseStart)/300, 1);
+        a.crateY = a.targetShelfY + (FLOOR_Y - 26 - a.targetShelfY) * t;
+        a.crateX = a.x;
+        if (t >= 1) { a.carriedId = a.pendingCarriedId; a.claimedAt = a.pendingClaimedAt; a.pendingCarriedId = null; a.phase = 'toDesk'; a.targetX = a.deskX; }
+      } else if (a.phase === 'toDesk') {
+        var dx2 = a.targetX - a.x, dist2 = Math.abs(dx2);
+        if (dist2 > 1.5) { a.x += Math.sign(dx2) * Math.min(WALK_SPEED*dt/1000, dist2); a.facing = dx2 >= 0 ? 1 : -1; a.crateX = a.x; a.crateY = FLOOR_Y - 26; }
+        else { a.x = a.targetX; a.phase = 'working'; a.crateX = a.x; a.crateY = FLOOR_Y - 26; }
+      } else if (a.phase === 'working') {
+        a.crateX = a.x; a.crateY = FLOOR_Y - 26;
+      } else if (a.phase === 'dropping') {
+        var t2 = Math.min((now - a.phaseStart)/350, 1);
+        a.crateAlpha = 1 - t2; a.crateY = (FLOOR_Y - 26) - t2*8;
+        if (t2 >= 1) { a.phase = 'atDesk'; a.crateVisible = false; a.carriedId = null; a.claimedAt = null; }
+      } else {
+        var dx3 = a.deskX - a.x;
+        if (Math.abs(dx3) > 1.5) { a.x += Math.sign(dx3) * Math.min(WALK_SPEED*dt/1000, Math.abs(dx3)); a.facing = dx3 >= 0 ? 1 : -1; }
+        else a.x = a.deskX;
+      }
+    });
+  }
+
+  function drawOffice(width, C){
+    // wall
+    ctx.fillStyle = C.wall; ctx.fillRect(0, 0, width, FLOOR_Y + 18);
+    ctx.fillStyle = C.wall2;
+    for (var y = 0; y < FLOOR_Y + 18; y += 28) ctx.fillRect(0, y, width, 1);
+    // window
+    var winX = width - 96, winY = 20, winW = 64, winH = 42;
+    ctx.fillStyle = C.panel; ctx.fillRect(winX, winY, winW, winH);
+    ctx.strokeStyle = C.lineStrong; ctx.lineWidth = 3; ctx.strokeRect(winX, winY, winW, winH);
+    ctx.beginPath(); ctx.moveTo(winX + winW/2, winY); ctx.lineTo(winX + winW/2, winY + winH);
+    ctx.moveTo(winX, winY + winH/2); ctx.lineTo(winX + winW, winY + winH/2); ctx.lineWidth = 2; ctx.stroke();
+    // floor
+    var tile = 28;
+    for (var fy = FLOOR_Y + 18; fy < CANVAS_H; fy += tile) {
+      for (var fx = 0; fx < width; fx += tile) {
+        var alt = ((fx/tile|0) + (fy/tile|0)) % 2 === 0;
+        ctx.fillStyle = alt ? C.floor : C.floor2;
+        ctx.fillRect(fx, fy, tile, Math.min(tile, CANVAS_H - fy));
+      }
+    }
+  }
+
+  function drawShelf(width, C){
+    var items = (state.workItems || []).filter(function(wi){ return wi.status === 'READY'; });
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = C.faint; ctx.font = "600 10px 'IBM Plex Mono', monospace";
+    ctx.fillText('QUEUE', 14, SHELF_Y - 26);
+    if (items.length === 0) {
+      ctx.fillStyle = C.faint; ctx.font = "italic 11px 'Libre Franklin', sans-serif";
+      ctx.fillText('No unclaimed items waiting.', 14, SHELF_Y + 4);
+      return;
+    }
+    var slots = layoutShelf(items.map(function(wi){ return wi.id; }), width);
+    items.forEach(function(wi){
+      var pos = slots[wi.id];
+      drawCrate(pos.x, pos.y, 22, 16, C);
+      ctx.fillStyle = C.faint; ctx.font = "9px 'IBM Plex Mono', monospace"; ctx.textAlign = 'center';
+      ctx.fillText((wi.id||'').replace('WI-',''), pos.x, pos.y + 22);
+    });
+    ctx.textAlign = 'left';
+  }
+
+  // A small chunky pixel-art person: block body, block head, two-tone shading.
+  // Drawn at integer-ish scale so it reads as "pixel art" rather than a smooth vector blob.
+  function drawPixelPerson(hue, shrink){
+    var s = 3 * shrink; // pixel unit
+    var body = 'hsl(' + hue + ',45%,42%)';
+    var bodyLight = 'hsl(' + hue + ',45%,54%)';
+    var skin = 'hsl(30,45%,72%)';
+    ctx.imageSmoothingEnabled = false;
+    // legs
+    ctx.fillStyle = 'hsl(' + hue + ',20%,25%)';
+    ctx.fillRect(-3*s, 0, 2*s, 3*s); ctx.fillRect(1*s, 0, 2*s, 3*s);
+    // torso
+    ctx.fillStyle = body; ctx.fillRect(-4*s, -8*s, 8*s, 8*s);
+    ctx.fillStyle = bodyLight; ctx.fillRect(-4*s, -8*s, 8*s, 2*s);
+    // arms
+    ctx.fillStyle = body; ctx.fillRect(-6*s, -7*s, 2*s, 5*s); ctx.fillRect(4*s, -7*s, 2*s, 5*s);
+    // head
+    ctx.fillStyle = skin; ctx.fillRect(-3*s, -14*s, 6*s, 6*s);
+    // eyes
+    ctx.fillStyle = 'hsl(220,20%,15%)'; ctx.fillRect(-2*s, -11*s, 1.4*s, 1.4*s); ctx.fillRect(1*s, -11*s, 1.4*s, 1.4*s);
+    ctx.imageSmoothingEnabled = true;
+  }
+
+  function drawPeer(a, now, C){
+    var bob = bobOffset(a, now);
+    var x = a.x, y = FLOOR_Y + bob;
+    var shrink = (a.phase === 'working') ? 0.94 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = 0.5; ctx.fillStyle = C.lineStrong;
+    ctx.beginPath(); ctx.ellipse(a.x, FLOOR_Y + 16, 13*shrink, 4*shrink, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(a.facing, 1);
+    drawPixelPerson(a.hue, shrink);
+    ctx.restore();
+
+    if (a.crateVisible) {
+      ctx.save(); ctx.globalAlpha = a.crateAlpha;
+      drawCrate(a.crateX, a.crateY, 15, 11, C);
+      ctx.fillStyle = C.accent; ctx.font = "600 9px 'IBM Plex Mono', monospace"; ctx.textAlign = 'center';
+      ctx.fillText(((a.carriedId || a.pendingCarriedId || '')+'').replace('WI-',''), a.crateX, a.crateY - 9);
+      ctx.restore();
+    }
+
+    // Real-elapsed-time progress bar while working.
+    if (a.phase === 'working' && a.claimedAt) {
+      var elapsedMin = Math.max(0, (now - new Date(a.claimedAt).getTime()) / 60000);
+      var frac = Math.min(1, elapsedMin / 30); // 30min reference window, purely visual scaling, not a deadline
+      var barW = 28, barX = x - barW/2, barY = y - 30;
+      ctx.save();
+      ctx.fillStyle = C.line; ctx.fillRect(barX, barY, barW, 4);
+      ctx.fillStyle = C.accent; ctx.fillRect(barX, barY, barW*frac, 4);
+      ctx.restore();
+    }
+
+    ctx.fillStyle = C.ink; ctx.font = "600 11px 'IBM Plex Mono', monospace"; ctx.textAlign = 'center';
+    ctx.fillText(a.name, a.x, FLOOR_Y + 34);
+    var statusLabel = a.carriedId ? (a.phase === 'working' ? 'working' : 'carrying it back')
+      : (a.phase === 'toShelf' || a.phase === 'lifting' ? 'heading to queue' : 'idle');
+    ctx.fillStyle = a.carriedId ? C.good : C.faint; ctx.font = "10px 'IBM Plex Mono', monospace";
+    ctx.fillText(statusLabel, a.x, FLOOR_Y + 46);
+  }
+
+  function draw(now){
+    if (!ctx || !canvas) return;
+    var width = canvas.clientWidth || 600;
+    var C = {
+      line: cssVar('--line'), lineStrong: cssVar('--line-strong'), panel: cssVar('--panel'), panel2: cssVar('--panel-2'),
+      ink: cssVar('--ink'), faint: cssVar('--faint'), accent: cssVar('--accent'), good: cssVar('--good'),
+      wall: cssVar('--studio-wall'), wall2: cssVar('--studio-wall-2'), floor: cssVar('--studio-floor'), floor2: cssVar('--studio-floor-2')
+    };
+    ctx.clearRect(0, 0, width, CANVAS_H);
+    drawOffice(width, C);
+    drawShelf(width, C);
+    Object.keys(animPeers).forEach(function(name){ drawPeer(animPeers[name], now, C); });
+  }
+
+  function ensureLoop(){
+    if (reduceMotion) { update(0, performance.now()); draw(performance.now()); return; }
+    if (rafId != null) return;
+    var last = performance.now();
+    function frame(now){
+      var dt = Math.min(now - last, 50); last = now;
+      update(dt, now); draw(now);
+      rafId = requestAnimationFrame(frame);
+    }
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function initCanvas(){
+    canvas = document.getElementById('fleet-canvas');
+    if (!canvas) return;
+    ctx = canvas.getContext('2d');
+    function resize(){
+      dpr = window.devicePixelRatio || 1;
+      var w = canvas.clientWidth || 600;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(CANVAS_H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      syncScene();
+      if (reduceMotion) draw(performance.now());
+    }
+    resize();
+    window.addEventListener('resize', resize);
+  }
+
+  function applyData(d){
+    state.data = d;
+    state.peers = d.peers || [];
+    state.workItems = d.workItems || [];
+    renderTiles(d);
+    renderPrs(d.prs);
+    renderActivity(d.activity);
+    renderQueue(d.queue);
+    syncScene();
+  }
+
+  async function loadData(){
+    try {
+      var res = await fetch('data.json?_=' + Date.now(), {cache: 'no-store'});
+      if (!res.ok) throw new Error('data.json: ' + res.status);
+      var d = await res.json();
+      applyData(d);
+    } catch (e) {
+      document.getElementById('freshness-time').textContent = 'unavailable';
+    }
+  }
+
+  initCanvas();
+  loadData();
+  setInterval(loadData, REFRESH_MS);
+})();
+</script>
+</body>
+</html>
