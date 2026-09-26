@@ -1,7 +1,15 @@
 {
-  "generatedAt": "2026-09-26T20:32:47.056488Z",
+  "generatedAt": "2026-09-26T20:45:04.004895Z",
   "controlPlaneAvailable": false,
-  "prs": [],
+  "prs": [
+    {
+      "number": 500,
+      "title": "fix: publish fleet dashboard via a repo-scoped deploy key",
+      "branch": "fix/dashboard-publish-deploy-key",
+      "url": "https://github.com/ExistenceDenied/Alexandria/pull/500",
+      "ciStatus": "pending"
+    }
+  ],
   "queue": {
     "ready": 0,
     "claimed": 0,
