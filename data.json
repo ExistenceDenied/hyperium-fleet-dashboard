@@ -1,8 +1,74 @@
 {
-  "generatedAt": null,
+  "generatedAt": "2026-09-26T20:32:47.056488Z",
+  "controlPlaneAvailable": false,
   "prs": [],
-  "queue": {"ready": 0, "claimed": 0, "waiting": 0},
+  "queue": {
+    "ready": 0,
+    "claimed": 0,
+    "waiting": 0
+  },
   "peers": [],
   "workItems": [],
-  "activity": []
+  "activity": [
+    {
+      "title": "PR #499: fix: reviewer gateway reports \"outcome unknown\" on a 5xx review POST",
+      "at": "2026-09-26T12:25:41Z"
+    },
+    {
+      "title": "PR #498: feat: GitHub App agent/reviewer identities, dormant until cutover (DEC-029)",
+      "at": "2026-09-26T12:17:13Z"
+    },
+    {
+      "title": "PR #497: fix: warn on silent SQLite fallback for runtime presence and concurrency guard",
+      "at": "2026-09-26T10:17:54Z"
+    },
+    {
+      "title": "PR #496: fix: warn loudly when Control Plane silently falls back to local SQLite",
+      "at": "2026-09-26T10:17:31Z"
+    },
+    {
+      "title": "PR #495: fix: make capture_stateful_prototypes.py parse on Python 3.11",
+      "at": "2026-09-26T10:17:27Z"
+    },
+    {
+      "title": "PR #494: feat: migrate CAP-Z to FEAT-032 (UX/UI Design Intelligence Engine, DEC-028)",
+      "at": "2026-09-26T10:16:24Z"
+    },
+    {
+      "title": "PR #493: feat: migrate CAP-F to FEAT-031 (Architecture & Design Engine, DEC-028)",
+      "at": "2026-09-21T21:35:08Z"
+    },
+    {
+      "title": "PR #492: feat: migrate CAP-V to FEAT-030 (Presentation / Document Generation Engine, DEC-028)",
+      "at": "2026-09-21T21:17:42Z"
+    },
+    {
+      "title": "PR #490: fix: give the fleet-dashboard snapshot step a real GH_TOKEN",
+      "at": "2026-09-21T21:16:00Z"
+    },
+    {
+      "title": "PR #491: feat: add --exclude-blocked to control_plane_cli.py list",
+      "at": "2026-09-21T21:12:53Z"
+    },
+    {
+      "title": "PR #488: feat: migrate CAP-A to FEAT-029 (Intent & Outcome Management, DEC-028)",
+      "at": "2026-09-21T21:01:59Z"
+    },
+    {
+      "title": "PR #489: feat: degrade fleet-dashboard snapshot per-section instead of all-or-nothing",
+      "at": "2026-09-21T20:55:45Z"
+    },
+    {
+      "title": "PR #486: feat: migrate CAP-X to FEAT-028 (Quantitative Investment & Portfolio Intelligence Engine, DEC-028)",
+      "at": "2026-09-21T20:32:40Z"
+    },
+    {
+      "title": "PR #487: docs: design spec for live fleet-dashboard updates via Postgres LISTEN/NOTIFY",
+      "at": "2026-09-21T20:30:47Z"
+    },
+    {
+      "title": "PR #485: feat: migrate CAP-J to FEAT-027 (Skills / Tooling Engine, DEC-028)",
+      "at": "2026-09-21T20:13:51Z"
+    }
+  ]
 }
